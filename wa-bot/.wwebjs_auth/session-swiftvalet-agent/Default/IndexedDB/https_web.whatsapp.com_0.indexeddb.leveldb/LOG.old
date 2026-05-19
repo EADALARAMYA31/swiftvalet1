@@ -1,0 +1,145 @@
+2026/05/17-21:54:51.413 4260 Reusing MANIFEST C:\Users\RAMYA\OneDrive\Desktop\swiftvalet1\wa-bot\.wwebjs_auth\session-swiftvalet-agent\Default\IndexedDB\https_web.whatsapp.com_0.indexeddb.leveldb/MANIFEST-000001
+2026/05/17-21:54:51.421 4260 Recovering log #11237
+2026/05/17-21:54:51.439 4260 Reusing old log C:\Users\RAMYA\OneDrive\Desktop\swiftvalet1\wa-bot\.wwebjs_auth\session-swiftvalet-agent\Default\IndexedDB\https_web.whatsapp.com_0.indexeddb.leveldb/011237.log 
+2026/05/17-21:54:51.440 4260 Delete type=2 #11273
+2026/05/17-21:54:51.440 4260 Delete type=2 #11274
+2026/05/17-21:54:51.440 4260 Delete type=2 #11275
+2026/05/17-21:54:51.440 4260 Delete type=2 #11276
+2026/05/17-21:54:51.440 4260 Delete type=2 #11277
+2026/05/17-21:55:16.244 67f8 Compacting 1@1 + 10@2 files
+2026/05/17-21:55:16.285 67f8 Generated table #11274@1: 22562 keys, 2150601 bytes
+2026/05/17-21:55:16.351 67f8 Generated table #11275@1: 115996 keys, 2271190 bytes
+2026/05/17-21:55:16.406 67f8 Generated table #11276@1: 98672 keys, 2246769 bytes
+2026/05/17-21:55:16.462 67f8 Generated table #11277@1: 98727 keys, 2247475 bytes
+2026/05/17-21:55:16.520 67f8 Generated table #11278@1: 97685 keys, 2246428 bytes
+2026/05/17-21:55:16.579 67f8 Generated table #11279@1: 97731 keys, 2246615 bytes
+2026/05/17-21:55:16.708 67f8 Generated table #11280@1: 98910 keys, 2248218 bytes
+2026/05/17-21:55:16.846 67f8 Generated table #11281@1: 98806 keys, 2249444 bytes
+2026/05/17-21:55:16.912 67f8 Generated table #11282@1: 97563 keys, 2246013 bytes
+2026/05/17-21:55:16.995 67f8 Generated table #11283@1: 98075 keys, 2247104 bytes
+2026/05/17-21:55:16.999 67f8 Generated table #11284@1: 544 keys, 12399 bytes
+2026/05/17-21:55:16.999 67f8 Compacted 1@1 + 10@2 files => 22412256 bytes
+2026/05/17-21:55:17.000 67f8 compacted to: files[ 0 1 41 19 0 0 0 ]
+2026/05/17-21:55:17.001 67f8 Delete type=2 #11143
+2026/05/17-21:55:17.001 67f8 Delete type=2 #11144
+2026/05/17-21:55:17.001 67f8 Delete type=2 #11145
+2026/05/17-21:55:17.001 67f8 Delete type=2 #11146
+2026/05/17-21:55:17.001 67f8 Delete type=2 #11147
+2026/05/17-21:55:17.001 67f8 Delete type=2 #11148
+2026/05/17-21:55:17.001 67f8 Delete type=2 #11149
+2026/05/17-21:55:17.001 67f8 Delete type=2 #11150
+2026/05/17-21:55:17.001 67f8 Delete type=2 #11151
+2026/05/17-21:55:17.001 67f8 Delete type=2 #11152
+2026/05/17-21:55:17.001 67f8 Delete type=2 #11241
+2026/05/17-21:55:19.963 4f38 Level-0 table #11286: started
+2026/05/17-21:55:20.040 4f38 Level-0 table #11286: 841753 bytes OK
+2026/05/17-21:55:20.043 4f38 Delete type=0 #11237
+2026/05/17-21:55:31.829 67f8 Compacting 1@0 + 1@1 files
+2026/05/17-21:55:31.876 67f8 Generated table #11287@0: 11059 keys, 146875 bytes
+2026/05/17-21:55:31.919 67f8 Generated table #11288@0: 4300 keys, 188088 bytes
+2026/05/17-21:55:31.930 67f8 Generated table #11289@0: 347 keys, 9204 bytes
+2026/05/17-21:55:31.940 67f8 Generated table #11290@0: 387 keys, 23874 bytes
+2026/05/17-21:55:31.940 67f8 Compacted 1@0 + 1@1 files => 368041 bytes
+2026/05/17-21:55:31.941 67f8 compacted to: files[ 0 4 41 19 0 0 0 ]
+2026/05/17-21:55:31.942 67f8 Delete type=2 #11242
+2026/05/17-21:55:31.943 67f8 Delete type=2 #11286
+2026/05/17-21:55:38.481 4f38 Compacting 1@1 + 10@2 files
+2026/05/17-21:55:38.505 4f38 Generated table #11291@1: 10994 keys, 135859 bytes
+2026/05/17-21:55:38.584 4f38 Generated table #11292@1: 2520 keys, 2147183 bytes
+2026/05/17-21:55:38.633 4f38 Generated table #11293@1: 2039 keys, 2143898 bytes
+2026/05/17-21:55:38.681 4f38 Generated table #11294@1: 2377 keys, 2142019 bytes
+2026/05/17-21:55:38.730 4f38 Generated table #11295@1: 3311 keys, 2157364 bytes
+2026/05/17-21:55:38.769 4f38 Generated table #11296@1: 3106 keys, 2153389 bytes
+2026/05/17-21:55:38.806 4f38 Generated table #11297@1: 2843 keys, 2152511 bytes
+2026/05/17-21:55:38.888 4f38 Generated table #11298@1: 2996 keys, 2151753 bytes
+2026/05/17-21:55:38.928 4f38 Generated table #11299@1: 15330 keys, 2175406 bytes
+2026/05/17-21:55:38.986 4f38 Generated table #11300@1: 35689 keys, 2249094 bytes
+2026/05/17-21:55:39.057 4f38 Generated table #11301@1: 28139 keys, 2267124 bytes
+2026/05/17-21:55:39.062 4f38 Generated table #11302@1: 66 keys, 6640 bytes
+2026/05/17-21:55:39.062 4f38 Compacted 1@1 + 10@2 files => 21882240 bytes
+2026/05/17-21:55:39.064 4f38 compacted to: files[ 0 3 43 19 0 0 0 ]
+2026/05/17-21:55:39.065 4f38 Delete type=2 #11244
+2026/05/17-21:55:39.065 4f38 Delete type=2 #11245
+2026/05/17-21:55:39.065 4f38 Delete type=2 #11246
+2026/05/17-21:55:39.065 4f38 Delete type=2 #11247
+2026/05/17-21:55:39.065 4f38 Delete type=2 #11248
+2026/05/17-21:55:39.065 4f38 Delete type=2 #11249
+2026/05/17-21:55:39.066 4f38 Delete type=2 #11250
+2026/05/17-21:55:39.066 4f38 Delete type=2 #11251
+2026/05/17-21:55:39.066 4f38 Delete type=2 #11252
+2026/05/17-21:55:39.066 4f38 Delete type=2 #11253
+2026/05/17-21:55:39.066 4f38 Delete type=2 #11287
+2026/05/17-21:55:39.679 67f8 Compacting 1@1 + 10@2 files
+2026/05/17-21:55:39.777 67f8 Generated table #11303@1: 22246 keys, 2149008 bytes
+2026/05/17-21:55:39.907 67f8 Generated table #11304@1: 116250 keys, 2273626 bytes
+2026/05/17-21:55:40.015 67f8 Generated table #11305@1: 98662 keys, 2246724 bytes
+2026/05/17-21:55:40.122 67f8 Generated table #11306@1: 98843 keys, 2248130 bytes
+2026/05/17-21:55:40.252 67f8 Generated table #11307@1: 97821 keys, 2248517 bytes
+2026/05/17-21:55:40.333 67f8 Generated table #11308@1: 97733 keys, 2246275 bytes
+2026/05/17-21:55:40.390 67f8 Generated table #11309@1: 98935 keys, 2247525 bytes
+2026/05/17-21:55:40.446 67f8 Generated table #11310@1: 98705 keys, 2247039 bytes
+2026/05/17-21:55:40.502 67f8 Generated table #11311@1: 97542 keys, 2246927 bytes
+2026/05/17-21:55:40.569 67f8 Generated table #11312@1: 98112 keys, 2246648 bytes
+2026/05/17-21:55:40.575 67f8 Generated table #11313@1: 225 keys, 5686 bytes
+2026/05/17-21:55:40.575 67f8 Compacted 1@1 + 10@2 files => 22406105 bytes
+2026/05/17-21:55:40.577 67f8 compacted to: files[ 0 2 44 19 0 0 0 ]
+2026/05/17-21:55:40.578 67f8 Delete type=2 #11274
+2026/05/17-21:55:40.578 67f8 Delete type=2 #11275
+2026/05/17-21:55:40.578 67f8 Delete type=2 #11276
+2026/05/17-21:55:40.579 67f8 Delete type=2 #11277
+2026/05/17-21:55:40.579 67f8 Delete type=2 #11278
+2026/05/17-21:55:40.579 67f8 Delete type=2 #11279
+2026/05/17-21:55:40.579 67f8 Delete type=2 #11280
+2026/05/17-21:55:40.579 67f8 Delete type=2 #11281
+2026/05/17-21:55:40.580 67f8 Delete type=2 #11282
+2026/05/17-21:55:40.580 67f8 Delete type=2 #11283
+2026/05/17-21:55:40.580 67f8 Delete type=2 #11289
+2026/05/17-21:56:11.691 67f8 Compacting 1@1 + 7@2 files
+2026/05/17-21:56:11.947 67f8 Generated table #11314@1: 28442 keys, 2263402 bytes
+2026/05/17-21:56:12.161 67f8 Generated table #11315@1: 28132 keys, 2262036 bytes
+2026/05/17-21:56:12.300 67f8 Generated table #11316@1: 23969 keys, 2258703 bytes
+2026/05/17-21:56:12.405 67f8 Generated table #11317@1: 22404 keys, 2165351 bytes
+2026/05/17-21:56:12.636 67f8 Generated table #11318@1: 34386 keys, 2236623 bytes
+2026/05/17-21:56:12.758 67f8 Generated table #11319@1: 19741 keys, 2192409 bytes
+2026/05/17-21:56:12.918 67f8 Generated table #11320@1: 4489 keys, 2126162 bytes
+2026/05/17-21:56:12.928 67f8 Generated table #11321@1: 2 keys, 7502 bytes
+2026/05/17-21:56:12.928 67f8 Compacted 1@1 + 7@2 files => 15512188 bytes
+2026/05/17-21:56:12.931 67f8 compacted to: files[ 0 1 45 19 0 0 0 ]
+2026/05/17-21:56:12.933 67f8 Delete type=2 #11265
+2026/05/17-21:56:12.934 67f8 Delete type=2 #11266
+2026/05/17-21:56:12.934 67f8 Delete type=2 #11267
+2026/05/17-21:56:12.934 67f8 Delete type=2 #11268
+2026/05/17-21:56:12.934 67f8 Delete type=2 #11269
+2026/05/17-21:56:12.934 67f8 Delete type=2 #11270
+2026/05/17-21:56:12.935 67f8 Delete type=2 #11271
+2026/05/17-21:56:12.935 67f8 Delete type=2 #11288
+2026/05/17-21:56:23.402 4f38 Compacting 1@2 + 10@3 files
+2026/05/17-21:56:23.690 4f38 Generated table #11322@2: 92478 keys, 2243816 bytes
+2026/05/17-21:56:23.932 4f38 Generated table #11323@2: 44623 keys, 2346104 bytes
+2026/05/17-21:56:24.144 4f38 Generated table #11324@2: 24604 keys, 2177438 bytes
+2026/05/17-21:56:24.343 4f38 Generated table #11325@2: 67068 keys, 2227825 bytes
+2026/05/17-21:56:24.525 4f38 Generated table #11326@2: 64641 keys, 2230227 bytes
+2026/05/17-21:56:24.696 4f38 Generated table #11327@2: 65667 keys, 2234612 bytes
+2026/05/17-21:56:24.829 4f38 Generated table #11328@2: 47232 keys, 2215876 bytes
+2026/05/17-21:56:24.960 4f38 Generated table #11329@2: 38608 keys, 2201091 bytes
+2026/05/17-21:56:25.085 4f38 Generated table #11330@2: 26108 keys, 2178215 bytes
+2026/05/17-21:56:25.160 4f38 Generated table #11331@2: 25477 keys, 1158164 bytes
+2026/05/17-21:56:25.160 4f38 Compacted 1@2 + 10@3 files => 21213368 bytes
+2026/05/17-21:56:25.163 4f38 compacted to: files[ 0 1 44 19 0 0 0 ]
+2026/05/17-21:56:25.165 4f38 Delete type=2 #11255
+2026/05/17-21:56:25.167 4f38 Delete type=2 #11256
+2026/05/17-21:56:25.168 4f38 Delete type=2 #11257
+2026/05/17-21:56:25.168 4f38 Delete type=2 #11258
+2026/05/17-21:56:25.168 4f38 Delete type=2 #11259
+2026/05/17-21:56:25.168 4f38 Delete type=2 #11260
+2026/05/17-21:56:25.168 4f38 Delete type=2 #11261
+2026/05/17-21:56:25.169 4f38 Delete type=2 #11262
+2026/05/17-21:56:25.169 4f38 Delete type=2 #11263
+2026/05/17-21:56:25.169 4f38 Delete type=2 #11264
+2026/05/17-21:56:25.169 4f38 Delete type=2 #11291
+2026/05/17-21:56:30.514 67f8 Compacting 1@1 + 6@2 files
+2026/05/17-21:56:30.792 67f8 Generated table #11332@1: 97389 keys, 2246985 bytes
+2026/05/17-21:56:30.969 67f8 Generated table #11333@1: 98802 keys, 2247188 bytes
+2026/05/17-21:56:31.232 67f8 Generated table #11334@1: 98022 keys, 2248927 bytes
+2026/05/17-21:56:31.317 67f8 compacted to: files[ 0 1 44 19 0 0 0 ]
+2026/05/17-21:56:31.317 67f8 Compaction error: IO error: C:\Users\RAMYA\OneDrive\Desktop\swiftvalet1\wa-bot\.wwebjs_auth\session-swiftvalet-agent\Default\IndexedDB\https_web.whatsapp.com_0.indexeddb.leveldb/011335.ldb: FILE_ERROR_NO_SPACE (ChromeMethodBFE: 3::WritableFileAppend::8)
