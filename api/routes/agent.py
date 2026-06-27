@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, Request
+from fastapi import APIRouter, Depends, Request, Response
 from sqlalchemy.orm import Session
 import random
 import re
@@ -9,9 +9,12 @@ from api.plate_extractor import extract_plate_from_image
 
 router = APIRouter(prefix="/agent", tags=["SwiftValet Agent"])
 
+# Thread-safe dictionary tracking operational state steps
 agent_memory = {}
 
+ALLOWED_COMMANDS = {"reset", "get my car", "picked", "delivered", "paid"}
 
+# ---------------- DATABASE DEPENDENCY ----------------
 def get_db():
     db = SessionLocal()
     try:
@@ -19,56 +22,40 @@ def get_db():
     finally:
         db.close()
 
-
+# ---------------- UTILITY FUNCTIONS ----------------
 def generate_otp():
     return str(random.randint(100000, 999999))
 
-
 def wa_number(phone):
     phone = str(phone).replace("+", "").replace(" ", "")
-
     if "@lid" in phone or "@c.us" in phone:
         return phone
-
     if phone.startswith("91") and len(phone) == 12:
         return phone
-
     if len(phone) == 10:
         return "91" + phone
-
     return phone
-
 
 def clean_db_phone(phone):
     phone = str(phone).replace("@c.us", "").replace("@lid", "")
     phone = phone.replace("+", "").replace(" ", "")
-
     if phone.startswith("91") and len(phone) == 12:
         phone = phone[2:]
-
     return phone
-
 
 def normalize_phone(phone):
     phone = str(phone)
-
     if "@lid" in phone:
         return phone
-
-    phone = phone.replace("@c.us", "")
-    phone = phone.replace("+", "")
-    phone = phone.replace(" ", "")
-
+    phone = phone.replace("@c.us", "").replace("+", "").replace(" ", "")
     if phone.startswith("91") and len(phone) == 12:
         phone = phone[2:]
-
     return phone
-
 
 def reply_to_sender(message):
     return {"reply": message}
 
-
+# FIXED: Standardized payload output matching Node client expectations
 def reply_and_send(reply, send_to, message):
     return {
         "reply": reply,
@@ -76,27 +63,30 @@ def reply_and_send(reply, send_to, message):
         "message": message
     }
 
+def extract_clean_plate(raw_text):
+    raw_text = str(raw_text).upper()
+    matches = re.findall(r"[A-Z]{2}[0-9]{1,2}[A-Z]{1,3}[0-9]{4}", raw_text)
+    if matches:
+        return matches[0]
+    cleaned = re.sub(r"[^A-Z0-9]", "", raw_text)
+    return cleaned[:20] if cleaned else "PLATE_NOT_FOUND"
 
+# ---------------- DOMAIN HELPERS ----------------
 def get_or_create_driver(db: Session, phone: str):
     driver = db.query(ValetDriver).filter(ValetDriver.phone == phone).first()
-
     if not driver:
         driver = ValetDriver(name="Valet Driver", phone=phone)
         db.add(driver)
         db.commit()
         db.refresh(driver)
-
     return driver
-
 
 def create_or_update_session(db: Session, vehicle_id: int, driver_id: int, otp: str):
     session = (
         db.query(ParkingSession)
         .filter(
             ParkingSession.vehicle_id == vehicle_id,
-            ParkingSession.state.in_(
-                ["PARKED", "OTP_PENDING", "REQUESTED", "IN_RETRIEVAL"]
-            )
+            ParkingSession.state.in_(["PARKED", "OTP_PENDING", "REQUESTED", "IN_RETRIEVAL"])
         )
         .first()
     )
@@ -119,22 +109,6 @@ def create_or_update_session(db: Session, vehicle_id: int, driver_id: int, otp: 
     db.refresh(session)
     return session
 
-
-def extract_clean_plate(raw_text):
-    raw_text = str(raw_text).upper()
-
-    matches = re.findall(
-        r"[A-Z]{2}[0-9]{1,2}[A-Z]{1,3}[0-9]{4}",
-        raw_text
-    )
-
-    if matches:
-        return matches[0]
-
-    cleaned = re.sub(r"[^A-Z0-9]", "", raw_text)
-    return cleaned[:20] if cleaned else "PLATE_NOT_FOUND"
-
-
 def continue_after_plate_confirmation(db, sender_phone, plate):
     vehicle = db.query(Vehicle).filter(Vehicle.plate_number == plate).first()
 
@@ -143,16 +117,11 @@ def continue_after_plate_confirmation(db, sender_phone, plate):
             "step": "waiting_customer_details",
             "plate": plate
         }
-
         return reply_to_sender(
-            f"""Vehicle {plate} is not registered.
-
-Please send customer details in this format:
-Name, Phone"""
+            f"🚗 Vehicle {plate} is not registered.\n\nPlease send customer details in format:\nName, Phone"
         )
 
     customer = vehicle.customer
-
     agent_memory[sender_phone] = {
         "step": "waiting_yes_no",
         "plate": plate,
@@ -160,90 +129,201 @@ Name, Phone"""
     }
 
     return reply_to_sender(
-        f"""Vehicle {plate} is already registered.
-
-Customer Name: {customer.name}
-Phone Number: {customer.phone}
-
-Do you want to change the phone number?
-Reply YES or NO."""
+        f"📋 Vehicle {plate} is already registered.\n\nCustomer: {customer.name}\nPhone: {customer.phone}\n\nDo you want to change the phone number?\nReply YES or NO."
     )
 
-
+# ---------------- WHATSAPP WEB AGENT ROUTE ----------------
 @router.post("/whatsapp-web")
-async def whatsapp_web_agent(
-    request: Request,
-    db: Session = Depends(get_db)
-):
+async def whatsapp_web_agent(request: Request, db: Session = Depends(get_db)):
     data = await request.json()
-
-    print("DATA:", data)
-
-    sender_phone = normalize_phone(data.get("from", ""))
+    
+    sender_raw = data.get("from", "")
+    sender_phone = normalize_phone(sender_raw)
     message = str(data.get("body", "")).strip()
     lower_msg = message.lower()
+    has_media = data.get("hasMedia", False)
 
-# EXISTING FLOW CONTINUES BELOW
+    # 1. Broad Systems Safety Gate
+    if "@broadcast" in sender_raw or "@newsletter" in sender_raw or "@g.us" in sender_raw:
+        return Response(status_code=200, content="")
 
-    print("SENDER:", sender_phone)
-    print("MESSAGE:", message)
+    is_in_flow = sender_phone in agent_memory
+    is_command = lower_msg in ALLOWED_COMMANDS
+    is_otp = message.isdigit() and len(message) == 6
 
-    # RESET
+    # Protect personal chats completely
+    if not (is_in_flow or is_command or is_otp or has_media):
+        return Response(status_code=200, content="")
+
+    # 2. RESET FLOW COMMAND
     if lower_msg == "reset":
         if sender_phone in agent_memory:
             del agent_memory[sender_phone]
+        return reply_to_sender("🔄 Flow reset successfully. Please send car image.")
 
-        return reply_to_sender(
-            "Flow reset successfully. Please send car image."
-        )
+    # 3. IMAGE PROCESSING FLOW (Moved up so it catches early image signals safely)
+    # 3. IMAGE PROCESSING FLOW
+    if has_media:
+        try:
+            media_base64 = data.get("mediaBase64")
+            if not media_base64:
+                return reply_to_sender("❌ Image file payload data not received properly.")
 
-        # CUSTOMER SAYS GET MY CAR
-        # CUSTOMER SAYS GET MY CAR
+            get_or_create_driver(db, sender_phone)
+            
+            print("🤖 Passing image data over to plate extractor layer...")
+            plate_raw = extract_plate_from_image(media_base64)
+            plate = extract_clean_plate(plate_raw)
+
+            print("RAW PLATE DETECTED:", plate_raw)
+            print("CLEANED PLATE:", plate)
+
+            agent_memory[sender_phone] = {
+                "step": "waiting_plate_confirmation",
+                "plate": plate
+            }
+
+            return reply_to_sender(
+                f"📸 Detected vehicle plate: {plate}\n\nReply *YES* to confirm or type the correct plate number manually."
+            )
+        except Exception as ocr_error:
+            print("🚨 OCR ENGINE CRASHED:", str(ocr_error))
+            return reply_to_sender(f"❌ Failed to process vehicle image. Error details: {str(ocr_error)[:100]}")
+
+    # 4. ACTIVE MEMORY FLOWS (Registration handling blocks)
+    if sender_phone in agent_memory:
+        memory = agent_memory[sender_phone]
+        step = memory["step"]
+
+        if step == "waiting_plate_confirmation":
+            plate = memory["plate"] if lower_msg == "yes" else extract_clean_plate(message)
+            del agent_memory[sender_phone]
+            return continue_after_plate_confirmation(db, sender_phone, plate)
+
+        if step == "waiting_customer_details":
+            try:
+                parts = message.split(",")
+                if len(parts) != 2:
+                    return reply_to_sender("⚠️ Invalid format. Please reply with: Name, Phone")
+
+                name = parts[0].strip()
+                customer_phone = parts[1].strip().replace(" ", "").replace("+91", "")
+
+                if not customer_phone.isdigit() or len(customer_phone) != 10:
+                    return reply_to_sender("❌ Please send a valid 10-digit phone number.")
+
+                plate = memory["plate"]
+                driver = get_or_create_driver(db, sender_phone)
+
+                customer = db.query(Customer).filter(Customer.phone == customer_phone).first()
+                if not customer:
+                    customer = Customer(name=name, phone=customer_phone)
+                    db.add(customer)
+                    db.commit()
+                    db.refresh(customer)
+
+                existing_vehicle = db.query(Vehicle).filter(Vehicle.plate_number == plate).first()
+                if existing_vehicle:
+                    return reply_to_sender("⚠️ This vehicle registration already exists inside the system.")
+
+                vehicle = Vehicle(plate_number=plate, customer_id=customer.id)
+                db.add(vehicle)
+                db.commit()
+                db.refresh(vehicle)
+
+                otp = generate_otp()
+                create_or_update_session(db=db, vehicle_id=vehicle.id, driver_id=driver.id, otp=otp)
+                del agent_memory[sender_phone]
+
+                customer_msg = f"🎉 Welcome to SwiftValet.\n\nYour vehicle *{plate}* is safely parked.\n🔑 Your retrieval code is: {otp}.\n\nWhen you need your car back, simply send: *get my car*"
+                driver_msg = f"✅ Customer registration successful.\n\nCustomer: {customer.name}\nVehicle *{plate}* linked with {customer_phone}.\nState: PARKED"
+
+                return reply_and_send(reply=driver_msg, send_to=customer_phone, message=customer_msg)
+
+            except Exception as e:
+                db.rollback()
+                return reply_to_sender(f"❌ System Processing Error: {str(e)}")
+
+        if step == "waiting_yes_no":
+            plate = memory["plate"]
+            vehicle_id = memory["vehicle_id"]
+            vehicle = db.query(Vehicle).filter(Vehicle.id == vehicle_id).first()
+
+            if not vehicle:
+                del agent_memory[sender_phone]
+                return reply_to_sender("❌ Error tracking vehicle. Please send car image again.")
+
+            customer = vehicle.customer
+
+            if lower_msg == "no":
+                driver = get_or_create_driver(db, sender_phone)
+                otp = generate_otp()
+                create_or_update_session(db=db, vehicle_id=vehicle.id, driver_id=driver.id, otp=otp)
+                del agent_memory[sender_phone]
+
+                otp_message = f"🚗 Your vehicle *{plate}* has been parked.\n\nWhen you are ready, reply with: *get my car*"
+                driver_message = f"✅ Session confirmed for customer {customer.name}.\n\nCustomer: {customer.phone}\nVehicle: {plate}\nState: PARKED"
+
+                return reply_and_send(reply=driver_message, send_to=customer.phone, message=otp_message)
+
+            if lower_msg == "yes":
+                agent_memory[sender_phone]["step"] = "waiting_new_phone"
+                return reply_to_sender("📱 Please send the new 10-digit customer phone number.")
+
+            return reply_to_sender("⚠️ Please reply explicitly with YES or NO.")
+
+        if step == "waiting_new_phone":
+            try:
+                new_phone = message.strip().replace(" ", "").replace("+91", "")
+                if not new_phone.isdigit() or len(new_phone) != 10:
+                    return reply_to_sender("❌ Please send a valid 10-digit phone number.")
+
+                plate = memory["plate"]
+                vehicle_id = memory["vehicle_id"]
+                vehicle = db.query(Vehicle).filter(Vehicle.id == vehicle_id).first()
+                customer = vehicle.customer
+
+                existing_customer = db.query(Customer).filter(Customer.phone == new_phone).first()
+                if existing_customer and existing_customer.id != customer.id:
+                    return reply_to_sender("⚠️ This phone number is already assigned to another profile.")
+
+                customer.phone = new_phone
+                db.commit()
+
+                driver = get_or_create_driver(db, sender_phone)
+                otp = generate_otp()
+                create_or_update_session(db=db, vehicle_id=vehicle.id, driver_id=driver.id, otp=otp)
+                del agent_memory[sender_phone]
+
+                customer_msg = f"🚗 Your vehicle *{plate}* is parked.\n🔑 Your retrieval OTP is: {otp}.\n\nWhen ready, reply: *get my car*"
+                driver_msg = f"✅ Customer profile updated.\n\nVehicle: {plate}\nOTP sent to updated number: {new_phone}.\nState: PARKED"
+
+                return reply_and_send(reply=driver_msg, send_to=new_phone, message=customer_msg)
+            except Exception as e:
+                db.rollback()
+                return reply_to_sender(f"❌ DB Error: {str(e)}")
+
+    # 5. GET MY CAR COMMAND
     if "get my car" in lower_msg:
-
-        print("GET MY CAR HIT")
-
-        session = (
-            db.query(ParkingSession)
-            .filter(ParkingSession.state == "PARKED")
-            .order_by(ParkingSession.id.desc())
-            .first()
-        )
-
-        print("SESSION:", session)
-
+        session = db.query(ParkingSession).filter(ParkingSession.state == "PARKED").order_by(ParkingSession.id.desc()).first()
         if not session:
-            return reply_to_sender("No active PARKED vehicle found.")
+            return reply_to_sender("❌ No active parked vehicles found matching your session request.")
 
         vehicle = session.vehicle
-
         otp = generate_otp()
         session.otp = otp
         session.state = "OTP_PENDING"
         db.commit()
 
         return reply_to_sender(
-            f"""Retrieval request received for vehicle {vehicle.plate_number}.
-
-Your confirmation OTP is {otp}.
-Reply with this OTP to confirm retrieval."""
+            f"🎯 Retrieval request initiated for vehicle *{vehicle.plate_number}*.\n\n🔑 Your active verification OTP is: *{otp}*.\nReply with this 6-digit code to confirm."
         )
 
-        # CUSTOMER OTP CONFIRMATION
-        # CUSTOMER OTP CONFIRMATION
+    # 6. OTP PROCESSING STAGE
     if message.isdigit() and len(message) == 6:
-        session = (
-            db.query(ParkingSession)
-            .filter(
-                ParkingSession.otp == message,
-                ParkingSession.state == "OTP_PENDING"
-            )
-            .order_by(ParkingSession.id.desc())
-            .first()
-        )
-
+        session = db.query(ParkingSession).filter(ParkingSession.otp == message, ParkingSession.state == "OTP_PENDING").order_by(ParkingSession.id.desc()).first()
         if not session:
-            return reply_to_sender("Invalid OTP or no OTP confirmation is pending.")
+            return reply_to_sender("❌ Invalid or expired verification code.")
 
         session.state = "REQUESTED"
         db.commit()
@@ -251,48 +331,20 @@ Reply with this OTP to confirm retrieval."""
         vehicle = session.vehicle
         customer = vehicle.customer
 
-        customer_msg = f"""OTP verified successfully.
+        customer_msg = f"✅ Code verified successfully.\n\nYour vehicle *{vehicle.plate_number}* retrieval request is queued.\nState: *REQUESTED*"
+        driver_msg = f"👨‍✈️ Urgent: Customer {customer.name} requested vehicle *{vehicle.plate_number}*.\n\nPhone: {customer.phone}\nZone: {session.park_zone}\n\n👉 Reply *PICKED* when starting retrieval.\n👉 Reply *DELIVERED* upon handover."
 
-Your vehicle {vehicle.plate_number} retrieval request is confirmed.
-State: REQUESTED"""
+        return reply_and_send(reply=customer_msg, send_to=session.driver.phone, message=driver_msg)
 
-        driver_msg = f"""Customer {customer.name} requested vehicle {vehicle.plate_number}.
-
-Customer Phone: {customer.phone}
-Parking Zone: {session.park_zone}
-State: REQUESTED
-
-Reply PICKED when you start retrieval.
-After pickup, reply DELIVERED after delivery."""
-
-        return reply_and_send(
-            customer_msg,
-            session.driver.phone,
-            driver_msg
-        )
-
-    # DRIVER SAYS PICKED
+    # 7. DRIVER STATE: PICKED UP
     if lower_msg == "picked":
-        driver = (
-            db.query(ValetDriver)
-            .filter(ValetDriver.phone == sender_phone)
-            .first()
-        )
-
+        driver = db.query(ValetDriver).filter(ValetDriver.phone == sender_phone).first()
         if not driver:
-            return reply_to_sender("Driver not found.")
+            return reply_to_sender("❌ Driver security authentication failed.")
 
-        session = (
-            db.query(ParkingSession)
-            .filter(
-                ParkingSession.driver_id == driver.id,
-                ParkingSession.state == "REQUESTED"
-            )
-            .first()
-        )
-
+        session = db.query(ParkingSession).filter(ParkingSession.driver_id == driver.id, ParkingSession.state == "REQUESTED").first()
         if not session:
-            return reply_to_sender("No REQUESTED vehicle assigned to you.")
+            return reply_to_sender("⚠️ No active REQUESTED delivery schedules linked to your profile.")
 
         session.state = "IN_RETRIEVAL"
         db.commit()
@@ -300,45 +352,20 @@ After pickup, reply DELIVERED after delivery."""
         vehicle = session.vehicle
         customer = vehicle.customer
 
-        driver_reply = f"""Vehicle {vehicle.plate_number} marked as IN_RETRIEVAL.
+        driver_reply = f"✅ Vehicle *{vehicle.plate_number}* tracked as *IN_RETRIEVAL*.\n\nReply *DELIVERED* once given to customer."
+        customer_msg = f"👨‍✈️ Your vehicle *{vehicle.plate_number}* is on its way!\n\nDriver has started retrieval process.\nState: *IN_RETRIEVAL*"
 
-Please retrieve and deliver the vehicle.
+        return reply_and_send(reply=driver_reply, send_to=customer.phone, message=customer_msg)
 
-After delivery, reply DELIVERED."""
-
-        customer_msg = f"""Your vehicle {vehicle.plate_number} is on the way.
-
-Driver has started retrieval.
-State: IN_RETRIEVAL"""
-
-        return reply_and_send(
-            driver_reply,
-            customer.phone,
-            customer_msg
-        )
-
-    # DRIVER SAYS DELIVERED
+    # 8. DRIVER STATE: DELIVERED
     if lower_msg == "delivered":
-        driver = (
-            db.query(ValetDriver)
-            .filter(ValetDriver.phone == sender_phone)
-            .first()
-        )
-
+        driver = db.query(ValetDriver).filter(ValetDriver.phone == sender_phone).first()
         if not driver:
-            return reply_to_sender("Driver not found.")
+            return reply_to_sender("❌ Driver profile validation failed.")
 
-        session = (
-            db.query(ParkingSession)
-            .filter(
-                ParkingSession.driver_id == driver.id,
-                ParkingSession.state == "IN_RETRIEVAL"
-            )
-            .first()
-        )
-
+        session = db.query(ParkingSession).filter(ParkingSession.driver_id == driver.id, ParkingSession.state == "IN_RETRIEVAL").first()
         if not session:
-            return reply_to_sender("No IN_RETRIEVAL vehicle assigned to you.")
+            return reply_to_sender("⚠️ No vehicles currently marked in retrieval for your profile.")
 
         session.state = "PAYMENT_PENDING"
         db.commit()
@@ -346,40 +373,16 @@ State: IN_RETRIEVAL"""
         vehicle = session.vehicle
         customer = vehicle.customer
 
-        driver_reply = f"""Vehicle {vehicle.plate_number} marked as DELIVERED.
+        driver_reply = f"📦 Vehicle *{vehicle.plate_number}* marked as *DELIVERED*.\n\nState: PAYMENT_PENDING\nWaiting on customer payment verification."
+        payment_msg = f"📦 Your vehicle *{vehicle.plate_number}* has arrived at the pick-up station.\n\n💰 Please settle the balance via the link below:\n`upi://pay?pa=swiftvalet@upi&pn=SwiftValet&am=100`\n\nReply *PAID* directly after submitting transaction."
 
-State: PAYMENT_PENDING
-Waiting for customer payment confirmation."""
+        return reply_and_send(reply=driver_reply, send_to=customer.phone, message=payment_msg)
 
-        payment_msg = f"""Your vehicle {vehicle.plate_number} has been delivered successfully.
-
-State: PAYMENT_PENDING
-
-Please complete payment:
-upi://pay?pa=swiftvalet@upi&pn=SwiftValet&am=100
-
-Reply PAID after payment."""
-
-        return reply_and_send(
-            driver_reply,
-            customer.phone,
-            payment_msg
-        )
-
-        # CUSTOMER SAYS PAID
+    # 9. CUSTOMER PAYMENT SENSE
     if lower_msg == "paid":
-
-        session = (
-            db.query(ParkingSession)
-            .filter(ParkingSession.state == "PAYMENT_PENDING")
-            .order_by(ParkingSession.id.desc())
-            .first()
-        )
-
+        session = db.query(ParkingSession).filter(ParkingSession.state == "PAYMENT_PENDING").order_by(ParkingSession.id.desc()).first()
         if not session:
-            return reply_to_sender(
-                "No payment is pending for your vehicle."
-            )
+            return reply_to_sender("❌ No structural transaction awaiting payment found.")
 
         session.state = "PAID_AND_EXITED"
         db.commit()
@@ -387,301 +390,14 @@ Reply PAID after payment."""
         vehicle = session.vehicle
         customer = vehicle.customer
 
-        customer_msg = f"""Payment received successfully.
+        customer_msg = f"🎉 Payment accepted successfully!\n\nVehicle *{vehicle.plate_number}* session closed out.\nState: *PAID_AND_EXITED*\n\nThank you for choosing SwiftValet!"
+        driver_msg = f"💰 Payment verified for vehicle *{vehicle.plate_number}*.\n\nCustomer: {customer.name}\nState: *PAID_AND_EXITED*\n\nValet mission complete."
 
-Vehicle {vehicle.plate_number} session completed.
-State: PAID_AND_EXITED
+        return reply_and_send(reply=customer_msg, send_to=session.driver.phone, message=driver_msg)
 
-Thank you for using SwiftValet."""
-
-        driver_msg = f"""Payment received successfully for vehicle {vehicle.plate_number}.
-
-Customer: {customer.name}
-Customer Phone: {customer.phone}
-
-State: PAID_AND_EXITED
-
-Session completed successfully."""
-
-        return reply_and_send(
-            customer_msg,
-            session.driver.phone,
-            driver_msg
-        )
-        
-
-    # MEMORY FLOWS
-    if sender_phone in agent_memory:
-        memory = agent_memory[sender_phone]
-        step = memory["step"]
-
-        # PLATE CONFIRMATION
-        if step == "waiting_plate_confirmation":
-            detected_plate = memory["plate"]
-
-            if lower_msg == "yes":
-                plate = detected_plate
-            else:
-                plate = extract_clean_plate(message)
-
-            del agent_memory[sender_phone]
-
-            return continue_after_plate_confirmation(db, sender_phone, plate)
-
-        # NEW VEHICLE DETAILS
-        if step == "waiting_customer_details":
-            try:
-                parts = message.split(",")
-
-                if len(parts) != 2:
-                    return reply_to_sender("Please send like: Name, Phone")
-
-                name = parts[0].strip()
-                customer_phone = parts[1].strip()
-                customer_phone = customer_phone.replace(" ", "")
-                customer_phone = customer_phone.replace("+91", "")
-
-                if not customer_phone.isdigit() or len(customer_phone) != 10:
-                    return reply_to_sender("Please send valid 10 digit phone number.")
-
-                plate = memory["plate"]
-                driver = get_or_create_driver(db, sender_phone)
-
-                customer = (
-                    db.query(Customer)
-                    .filter(Customer.phone == customer_phone)
-                    .first()
-                )
-
-                if not customer:
-                    customer = Customer(
-                        name=name,
-                        phone=customer_phone
-                    )
-                    db.add(customer)
-                    db.commit()
-                    db.refresh(customer)
-
-                existing_vehicle = (
-                    db.query(Vehicle)
-                    .filter(Vehicle.plate_number == plate)
-                    .first()
-                )
-
-                if existing_vehicle:
-                    return reply_to_sender("This vehicle is already registered.")
-
-                vehicle = Vehicle(
-                    plate_number=plate,
-                    customer_id=customer.id
-                )
-                db.add(vehicle)
-                db.commit()
-                db.refresh(vehicle)
-
-                otp = generate_otp()
-
-                create_or_update_session(
-                    db=db,
-                    vehicle_id=vehicle.id,
-                    driver_id=driver.id,
-                    otp=otp
-                )
-
-                del agent_memory[sender_phone]
-
-                customer_msg = f"""Welcome to SwiftValet.
-
-Your vehicle {plate} is parked.
-Your OTP is {otp}.
-State: PARKED
-
-When you need the car, send:
-get my car"""
-
-                driver_msg = f"""Customer registered successfully.
-
-Customer Name: {customer.name}
-Vehicle {plate} linked with {customer_phone}.
-State: PARKED"""
-
-                return reply_and_send(
-                    driver_msg,
-                    customer_phone,
-                    customer_msg
-                )
-
-            except Exception as e:
-                print("WAITING_CUSTOMER_DETAILS ERROR:", e)
-                db.rollback()
-                return reply_to_sender(f"ERROR: {str(e)}")
-
-        # EXISTING VEHICLE YES/NO
-        if step == "waiting_yes_no":
-            try:
-                plate = memory["plate"]
-                vehicle_id = memory["vehicle_id"]
-
-                vehicle = (
-                    db.query(Vehicle)
-                    .filter(Vehicle.id == vehicle_id)
-                    .first()
-                )
-
-                if not vehicle:
-                    del agent_memory[sender_phone]
-                    return reply_to_sender("Vehicle not found. Please send car image again.")
-
-                customer = vehicle.customer
-
-                if lower_msg == "no":
-                    driver = get_or_create_driver(db, sender_phone)
-                    otp = generate_otp()
-
-                    create_or_update_session(
-                        db=db,
-                        vehicle_id=vehicle.id,
-                        driver_id=driver.id,
-                        otp=otp
-                    )
-
-                    del agent_memory[sender_phone]
-
-                    otp_message = f"""Your vehicle {plate} is parked.
-Your OTP is {otp}.
-State: PARKED
-
-When you need the car, send:
-get my car"""
-
-                    driver_message = f"""OTP/message sent successfully to customer {customer.name}.
-
-Customer Number: {customer.phone}
-Vehicle: {plate}
-State: PARKED"""
-
-                    return reply_and_send(
-                        driver_message,
-                        customer.phone,
-                        otp_message
-                    )
-
-                if lower_msg == "yes":
-                    agent_memory[sender_phone]["step"] = "waiting_new_phone"
-                    return reply_to_sender("Please send the new customer phone number.")
-
-                return reply_to_sender("Please reply YES or NO.")
-
-            except Exception as e:
-                print("WAITING_YES_NO ERROR:", e)
-                db.rollback()
-                return reply_to_sender("Something went wrong. Please send reset and try again.")
-
-        # UPDATE CUSTOMER PHONE
-        if step == "waiting_new_phone":
-            try:
-                new_phone = message.strip().replace(" ", "").replace("+91", "")
-
-                if not new_phone.isdigit() or len(new_phone) != 10:
-                    return reply_to_sender("Please send valid 10 digit phone number.")
-
-                plate = memory["plate"]
-                vehicle_id = memory["vehicle_id"]
-
-                vehicle = (
-                    db.query(Vehicle)
-                    .filter(Vehicle.id == vehicle_id)
-                    .first()
-                )
-
-                if not vehicle:
-                    del agent_memory[sender_phone]
-                    return reply_to_sender("Vehicle not found. Please send car image again.")
-
-                customer = vehicle.customer
-
-                existing_customer = (
-                    db.query(Customer)
-                    .filter(Customer.phone == new_phone)
-                    .first()
-                )
-
-                if existing_customer and existing_customer.id != customer.id:
-                    return reply_to_sender("This phone number is already registered.")
-
-                customer.phone = new_phone
-                db.commit()
-
-                driver = get_or_create_driver(db, sender_phone)
-                otp = generate_otp()
-
-                create_or_update_session(
-                    db=db,
-                    vehicle_id=vehicle.id,
-                    driver_id=driver.id,
-                    otp=otp
-                )
-
-                del agent_memory[sender_phone]
-
-                customer_msg = f"""Your vehicle {plate} is parked.
-Your OTP is {otp}.
-State: PARKED
-
-When you need the car, send:
-get my car"""
-
-                driver_msg = f"""Customer phone number updated successfully.
-
-Vehicle: {plate}
-OTP/message sent to {new_phone}.
-State: PARKED"""
-
-                return reply_and_send(
-                    driver_msg,
-                    new_phone,
-                    customer_msg
-                )
-
-            except Exception as e:
-                print("WAITING_NEW_PHONE ERROR:", e)
-                db.rollback()
-                return reply_to_sender(f"DB Error: {str(e)[:200]}")
-
-    # DRIVER SENDS IMAGE
-    has_media = data.get("hasMedia", False)
-
-    if has_media:
-        media_base64 = data.get("mediaBase64")
-
-        if not media_base64:
-            return reply_to_sender("Image not received properly.")
-
-        get_or_create_driver(db, sender_phone)
-
-        plate_raw = extract_plate_from_image(media_base64)
-        plate = extract_clean_plate(plate_raw)
-
-        print("RAW PLATE:", plate_raw)
-        print("FINAL PLATE:", plate)
-
-        agent_memory[sender_phone] = {
-            "step": "waiting_plate_confirmation",
-            "plate": plate
-        }
-
-        return reply_to_sender(
-            f"""Detected vehicle plate: {plate}
-
-Reply YES to confirm
-OR send correct plate number manually."""
-        )
-
-    return reply_to_sender("Message received but no matching flow found.")
+    return Response(status_code=200, content="")
 
 
 @router.get("/test")
 def test():
-    return {
-        "message": "SwiftValet whatsapp-web.js backend is running"
-    }
+    return {"message": "SwiftValet backend running"}

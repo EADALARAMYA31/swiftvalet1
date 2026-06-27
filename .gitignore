@@ -1,0 +1,4 @@
+wa-bot/.wwebjs_auth/ 
+wa-bot/node_modules/ 
+.env 
+__pycache__/ 
